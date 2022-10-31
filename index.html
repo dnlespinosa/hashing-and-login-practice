@@ -28,7 +28,11 @@
     </nav>
 
 
-
+    <div class="container" style="margin-top: 2em">
+        {% for category, msg in get_flashed_messages(with_categories=True) %}
+            <div class="alert-{{category}}">{{msg}}</div>
+        {% endfor %}
+    </div>
 
 
     {% if 'user_id' not in session %}

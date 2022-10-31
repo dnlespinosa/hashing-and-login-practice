@@ -1,7 +1,8 @@
 from flask import Flask, render_template, redirect, session, flash
 from flask_debugtoolbar import DebugToolbarExtension
-from models import connect_db, db, User
-from forms import UserForm
+from models import connect_db, db, User, Tweet
+from forms import UserForm, TweetForm
+from sqlalchemy.exc import IntegrityError
 
 def awful_hash(phrase):
     return ''.join(next_char(c) for c in phrase) 
@@ -56,8 +57,11 @@ def register_user():
         new_user = User.register(username, password)
 
         db.session.add(new_user)
-        db.session.commit()
-
+        try:
+            db.session.commit()
+        except IntegrityError:
+            form.username.errors.append('Username Taken, Please pick another')
+            return render_template('register.html')
         redirect('/tweets')
 
     return render_template('register.html', form=form)
@@ -109,15 +113,39 @@ def login_user2():
 
 @app.route('/tweets')
 def show_tweets():
+    
     if 'user_id' not in session:
-        flash('please login first')
+        flash('please login first', 'danger')
         return redirect('/')
+    form = TweetForm()
+    all_tweets = Tweet.query.all()
+    if form.validate_on_submit():
+        text = form.text.data
+        new_tweet = Tweet(text=text, user_id=session['user_id'])
+        db.session.add(new_tweet)
+        db.session.commit()
+        flash('Tweet Created', 'success')
+        redirect('/tweets')
 
-    return render_template('tweets.html')
+    return render_template('tweets.html', form=form, tweets=all_tweets)
+
+@app.route('/tweets/<int:id>', methods=['POST'])
+def delete_tweet(id):
+    '''delete tweet'''
+    if 'user_id' not in session:
+        flash('please login first', 'danger')
+        return redirect('/login')
+    tweet = Tweet.query.get_or_404(id)
+    if tweet.user_id == session['user_id']:
+        db.session.delete(tweet)
+        db.session.commit()
+        flash('Tweet Deleted', 'info')
+        return redirect('/tweets')
+    else:
+        flask('You dont have permission to do that', 'danger')
+        return redirect('/tweets')
 
 @app.route('/logout')
 def logout_user():
     session.pop('user_id')
     return redirect('/')
-    
-
